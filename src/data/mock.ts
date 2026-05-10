@@ -1,6 +1,5 @@
 import type { ServiceCategory, Service, Master, Review, GalleryItem, ContactInfo, Booking } from '@/types';
 
-// ============ SERVICE CATEGORIES ============
 export const serviceCategories: ServiceCategory[] = [
   {
     id: 'manicure',
@@ -24,7 +23,7 @@ export const serviceCategories: ServiceCategory[] = [
     id: 'eyebrows',
     name: 'Брови',
     slug: 'eyebrows',
-    icon: '🪄',
+    icon: '✨',
     description: 'Архітектура брів, фарбування, ламінування, перманентний макіяж',
     image: 'https://images.unsplash.com/photo-1560869713-7d0a29430803?w=800',
     order: 3,
