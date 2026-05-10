@@ -2,17 +2,25 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import Image from 'next/image';
 import { Calendar, Clock, User, Star, LogOut, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
-import { useBookingsStore } from '@/store/bookingsstore';
-import { masters, mockUsers } from '@/data/mock';
+import { useBookingsStore } from '@/store/bookingsStore';
+import { useDataStore } from '@/store/dataStore';
+import { mockUsers } from '@/data/mock';
 import { formatDate, formatPrice, getStatusLabel, getStatusBadgeClass, generateCalendarDays, MONTHS_UK, WEEKDAYS_UK, cn } from '@/lib/utils';
 import type { Booking } from '@/types';
+
+const STAR_PATH = 'M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z';
 
 export default function MasterDashboard() {
   const router = useRouter();
   const { user, logout } = useAuthStore();
   const allBookings = useBookingsStore(s => s.bookings);
+  const getMasterBookings = useBookingsStore(s => s.getMasterBookings);
+  // ✅ беремо майстрів з dataStore а не з mock напряму
+  const masters = useDataStore(s => s.masters);
+
   const [activeTab, setActiveTab] = useState<'schedule' | 'bookings' | 'profile'>('schedule');
   const [mounted, setMounted] = useState(false);
   useEffect(() => { setMounted(true); }, []);
@@ -23,13 +31,15 @@ export default function MasterDashboard() {
     return null;
   }
 
-  // Find master profile
-  const masterUser = mockUsers.find((u: any) => u.id === user.id);
-  const master = masters.find(m => m.id === masterUser?.masterId) || masters[0];
-  const masterBookings = allBookings.filter(b => b.masterId === master.id);
+  const masterUser = mockUsers.find(u => u.id === user.id);
+  const master = masters.find(m => m.id === (masterUser as any)?.masterId) || masters[0];
 
+  // ✅ використовуємо getMasterBookings зі стору
+  const masterBookings = getMasterBookings(master.id);
   const today = new Date().toISOString().split('T')[0];
-  const upcomingBookings = masterBookings.filter(b => b.date >= today && b.status !== 'cancelled').sort((a, b) => a.date.localeCompare(b.date));
+  const upcomingBookings = masterBookings
+    .filter(b => b.date >= today && b.status !== 'cancelled')
+    .sort((a, b) => a.date.localeCompare(b.date));
 
   return (
     <div className="bg-lumi-milk min-h-screen">
@@ -38,7 +48,7 @@ export default function MasterDashboard() {
         <div className="page-container">
           <div className="flex items-center justify-between h-14">
             <div className="flex items-center gap-3">
-              <img src={master.avatar} alt={master.name} className="w-8 h-8 rounded-full object-cover" />
+              <Image src={master.avatar} alt={master.name} width={32} height={32} className="rounded-full object-cover" />
               <div>
                 <p className="font-medium text-white text-sm">{master.name}</p>
                 <p className="text-white/50 text-xs">Майстер</p>
@@ -79,15 +89,14 @@ export default function MasterDashboard() {
           {/* Sidebar */}
           <aside className="w-full lg:w-56 flex-shrink-0">
             <div className="bg-white rounded-3xl shadow-soft p-4">
-              {/* Master info */}
               <div className="flex flex-col items-center text-center gap-3 p-3 mb-3 border-b border-lumi-border">
-                <img src={master.avatar} alt={master.name} className="w-16 h-16 rounded-full object-cover" />
+                <Image src={master.avatar} alt={master.name} width={64} height={64} className="rounded-full object-cover" />
                 <div>
                   <p className="font-medium text-lumi-text text-sm">{master.name}</p>
                   <p className="text-xs text-lumi-muted">{master.specializations.join(', ')}</p>
                   <div className="flex items-center gap-1 justify-center mt-1">
                     <svg className="w-3 h-3 fill-amber-400" viewBox="0 0 20 20">
-                      <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                      <path d={STAR_PATH} />
                     </svg>
                     <span className="text-xs font-semibold text-lumi-text">{master.rating}</span>
                     <span className="text-xs text-lumi-muted">({master.reviewsCount})</span>
@@ -126,12 +135,11 @@ export default function MasterDashboard() {
   );
 }
 
-// ============ SCHEDULE TAB ============
 function ScheduleTab({ master, bookings }: { master: any; bookings: Booking[] }) {
   const now = new Date();
   const [currentMonth, setCurrentMonth] = useState(now.getMonth());
   const [currentYear, setCurrentYear] = useState(now.getFullYear());
-  const [selectedDate, setSelectedDate] = useState<string | null>(new Date().toISOString().split('T')[0]);
+  const [selectedDate, setSelectedDate] = useState<string | null>(now.toISOString().split('T')[0]);
 
   const days = generateCalendarDays(currentYear, currentMonth);
 
@@ -144,21 +152,27 @@ function ScheduleTab({ master, bookings }: { master: any; bookings: Booking[] })
     ? bookings.filter(b => b.date === selectedDate && b.status !== 'cancelled').sort((a, b) => a.time.localeCompare(b.time))
     : [];
 
+  const prevMonth = () => {
+    if (currentMonth === 0) { setCurrentMonth(11); setCurrentYear(y => y - 1); }
+    else setCurrentMonth(m => m - 1);
+  };
+  const nextMonth = () => {
+    if (currentMonth === 11) { setCurrentMonth(0); setCurrentYear(y => y + 1); }
+    else setCurrentMonth(m => m + 1);
+  };
+
   return (
     <div className="space-y-4">
       <h2 className="font-serif font-medium text-lumi-text text-2xl">Мій розклад</h2>
-
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Calendar */}
         <div className="bg-white rounded-2xl shadow-soft p-5">
           <div className="flex items-center justify-between mb-4">
-            <button onClick={() => { if (currentMonth === 0) { setCurrentMonth(11); setCurrentYear(y => y - 1); } else setCurrentMonth(m => m - 1); }}
-              className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-lumi-cream">
+            <button onClick={prevMonth} className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-lumi-cream">
               <ChevronLeft className="w-4 h-4 text-lumi-muted" />
             </button>
             <h3 className="font-serif font-medium text-lumi-text">{MONTHS_UK[currentMonth]} {currentYear}</h3>
-            <button onClick={() => { if (currentMonth === 11) { setCurrentMonth(0); setCurrentYear(y => y + 1); } else setCurrentMonth(m => m + 1); }}
-              className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-lumi-cream">
+            <button onClick={nextMonth} className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-lumi-cream">
               <ChevronRight className="w-4 h-4 text-lumi-muted" />
             </button>
           </div>
@@ -175,18 +189,13 @@ function ScheduleTab({ master, bookings }: { master: any; bookings: Booking[] })
               const dateStr = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
               const dayBookings = getDayBookings(day);
               const isSelected = selectedDate === dateStr;
-              const today = new Date();
-              const isToday = new Date(currentYear, currentMonth, day).toDateString() === today.toDateString();
+              const isToday = new Date(currentYear, currentMonth, day).toDateString() === now.toDateString();
 
               return (
                 <button
                   key={idx}
                   onClick={() => setSelectedDate(dateStr)}
-                  className={cn(
-                    'calendar-day relative',
-                    isSelected && 'selected',
-                    !isSelected && isToday && 'today'
-                  )}
+                  className={cn('calendar-day relative', isSelected && 'selected', !isSelected && isToday && 'today')}
                 >
                   {day}
                   {dayBookings.length > 0 && !isSelected && (
@@ -203,7 +212,6 @@ function ScheduleTab({ master, bookings }: { master: any; bookings: Booking[] })
           <h3 className="font-medium text-lumi-text mb-4">
             {selectedDate ? formatDate(selectedDate) : 'Оберіть день'}
           </h3>
-
           {selectedBookings.length === 0 ? (
             <div className="text-center py-8 text-lumi-muted">
               <Calendar className="w-8 h-8 mx-auto mb-2 opacity-30" />
@@ -233,7 +241,6 @@ function ScheduleTab({ master, bookings }: { master: any; bookings: Booking[] })
   );
 }
 
-// ============ BOOKINGS TAB ============
 function BookingsTab({ bookings }: { bookings: Booking[] }) {
   return (
     <div>
@@ -265,7 +272,7 @@ function BookingsTab({ bookings }: { bookings: Booking[] }) {
                       <Clock className="w-3.5 h-3.5" /> {b.time}
                     </p>
                   </div>
-                  {b.notes && <p className="text-xs text-lumi-muted mt-2 italic">"{b.notes}"</p>}
+                  {b.notes && <p className="text-xs text-lumi-muted mt-2 italic">&quot;{b.notes}&quot;</p>}
                 </div>
                 <p className="font-bold text-lumi-text flex-shrink-0">{formatPrice(b.price)}</p>
               </div>
@@ -277,14 +284,13 @@ function BookingsTab({ bookings }: { bookings: Booking[] }) {
   );
 }
 
-// ============ MASTER PROFILE TAB ============
 function MasterProfileTab({ master }: { master: any }) {
   return (
     <div>
       <h2 className="font-serif font-medium text-lumi-text text-2xl mb-4">Мій профіль</h2>
       <div className="bg-white rounded-2xl shadow-soft p-6">
         <div className="flex items-start gap-5 mb-6 pb-6 border-b border-lumi-border">
-          <img src={master.avatar} alt={master.name} className="w-20 h-20 rounded-2xl object-cover flex-shrink-0" />
+          <Image src={master.avatar} alt={master.name} width={80} height={80} className="rounded-2xl object-cover flex-shrink-0" />
           <div>
             <h3 className="font-serif font-medium text-lumi-text text-xl">{master.name}</h3>
             <p className="text-lumi-muted text-sm mt-1">{master.specializations.join(' · ')}</p>

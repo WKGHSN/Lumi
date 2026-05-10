@@ -24,13 +24,14 @@ export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState<AdminTab>('dashboard');
   const [searchQuery, setSearchQuery] = useState('');
   const [mounted, setMounted] = useState(false);
-  useEffect(() => { setMounted(true); }, []);
-  if (!mounted) return <div className="min-h-screen bg-lumi-milk" />;
-
-  if (!user || user.role !== 'admin') {
+  useEffect(() => {
+  if (mounted && !user) {
     router.push('/auth/login');
-    return null;
   }
+}, [mounted, user, router]);
+
+if (!mounted) return <div className="min-h-screen bg-lumi-milk" />;
+if (!user) return <div className="min-h-screen bg-lumi-milk" />;
 
   const today = new Date().toISOString().split('T')[0];
   const todayBookings = allBookings.filter(b => b.date === today);
@@ -121,7 +122,6 @@ export default function AdminDashboard() {
   );
 }
 
-// ============ DASHBOARD TAB ============
 function DashboardTab({ allBookings, todayBookings, pendingCount, totalRevenue, updateStatus }: any) {
   const statsCards = [
     { label: 'Записів сьогодні', value: todayBookings.length, icon: Calendar, color: 'bg-blue-50 text-blue-600' },
@@ -201,7 +201,6 @@ function DashboardTab({ allBookings, todayBookings, pendingCount, totalRevenue, 
   );
 }
 
-// ============ BOOKINGS TAB ============
 function BookingsTab({ bookings, searchQuery, setSearchQuery, updateStatus, cancelBooking }: any) {
   return (
     <div className="space-y-4">
@@ -260,7 +259,6 @@ function BookingsTab({ bookings, searchQuery, setSearchQuery, updateStatus, canc
   );
 }
 
-// ============ SERVICES TAB ============
 function ServicesTab() {
   const { services: storeServices, addService, updateService, toggleServiceActive } = useDataStore();
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -398,7 +396,6 @@ function ServicesTab() {
   );
 }
 
-// ============ MASTERS TAB ============
 function MastersTab() {
   const { masters: storeMasters, updateMaster, toggleMasterActive, updateMasterAvatar } = useDataStore();
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -544,7 +541,6 @@ function MastersTab() {
   );
 }
 
-// ============ GALLERY TAB ============
 function GalleryTab() {
   const { gallery, addGalleryItem, removeGalleryItem, updateGalleryItem, reorderGallery } = useDataStore();
   const { masters: storeMasters } = useDataStore();
@@ -756,7 +752,6 @@ function GalleryTab() {
   );
 }
 
-// ============ CLIENTS TAB ============
 function ClientsTab({ bookings }: { bookings: Booking[] }) {
   const uniqueClients = Array.from(
     new Map(bookings.map(b => [b.clientId, { id: b.clientId, name: b.clientName, phone: b.clientPhone }])).values()

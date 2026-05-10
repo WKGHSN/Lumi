@@ -2,9 +2,9 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Calendar, Clock, User, LogOut, Plus, ChevronRight, Phone, Mail, Star } from 'lucide-react';
+import { Calendar, Clock, User, LogOut, Plus, ChevronRight, Star } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
-import { useBookingsStore } from '@/store/bookingsstore';
+import { useBookingsStore } from '@/store/bookingsStore';
 import { formatDate, formatPrice, getStatusLabel, getStatusBadgeClass, cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
 import type { Booking } from '@/types';
@@ -16,23 +16,23 @@ export default function ClientDashboard() {
   const { user, logout } = useAuthStore();
   const allBookings = useBookingsStore(s => s.bookings);
   const cancelBooking = useBookingsStore(s => s.cancelBooking);
+  const getUpcomingBookings = useBookingsStore(s => s.getUpcomingBookings);
+  const getPastBookings = useBookingsStore(s => s.getPastBookings);
   const [activeTab, setActiveTab] = useState<TabType>('upcoming');
-
-  // SSR safety
   const [mounted, setMounted] = useState(false);
-  useEffect(() => { setMounted(true); }, []);
 
-  if (!mounted) return <div className="min-h-screen bg-lumi-milk" />;
-
-  if (!user) {
+  useEffect(() => {
+  if (mounted && !user) {
     router.push('/auth/login');
-    return null;
   }
+}, [mounted, user, router]);
+
+if (!mounted) return <div className="min-h-screen bg-lumi-milk" />;
+if (!user) return <div className="min-h-screen bg-lumi-milk" />;
 
   const userBookings = allBookings.filter(b => b.clientId === user.id);
-  const today = new Date().toISOString().split('T')[0];
-  const upcoming = userBookings.filter(b => b.date >= today && b.status !== 'cancelled').sort((a, b) => a.date.localeCompare(b.date));
-  const past = userBookings.filter(b => b.date < today || b.status === 'completed' || b.status === 'cancelled').sort((a, b) => b.date.localeCompare(a.date));
+  const upcoming = getUpcomingBookings(user.id);
+  const past = getPastBookings(user.id);
 
   const handleCancel = (id: string) => {
     cancelBooking(id);
@@ -61,7 +61,9 @@ export default function ClientDashboard() {
                 {user.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
               </div>
               <div>
-                <h1 className="font-serif font-medium text-lumi-text text-xl">Привіт, {user.name.split(' ')[0]}!</h1>
+                <h1 className="font-serif font-medium text-lumi-text text-xl">
+                  Привіт, {user.name.split(' ')[0]}!
+                </h1>
                 <p className="text-lumi-muted text-sm">{user.email}</p>
               </div>
             </div>
@@ -149,17 +151,13 @@ export default function ClientDashboard() {
                   <EmptyState message="Ваша історія записів порожня" />
                 ) : (
                   <div className="space-y-3">
-                    {past.map(b => (
-                      <BookingCard key={b.id} booking={b} />
-                    ))}
+                    {past.map(b => <BookingCard key={b.id} booking={b} />)}
                   </div>
                 )}
               </div>
             )}
 
-            {activeTab === 'profile' && (
-              <ProfileTab user={user} />
-            )}
+            {activeTab === 'profile' && <ProfileTab user={user} />}
           </div>
         </div>
       </div>
@@ -167,7 +165,11 @@ export default function ClientDashboard() {
   );
 }
 
-function BookingCard({ booking, onCancel, showCancel }: { booking: Booking; onCancel?: (id: string) => void; showCancel?: boolean }) {
+function BookingCard({ booking, onCancel, showCancel }: {
+  booking: Booking;
+  onCancel?: (id: string) => void;
+  showCancel?: boolean;
+}) {
   return (
     <div className="bg-white rounded-2xl shadow-soft p-5">
       <div className="flex items-start justify-between gap-4">
@@ -217,7 +219,7 @@ function EmptyState({ message, action }: { message: string; action?: React.React
 function ProfileTab({ user }: { user: any }) {
   const [name, setName] = useState(user.name);
   const [email, setEmail] = useState(user.email);
-  const [phone, setPhone] = useState('+38 (096) 123-45-67');
+  const [phone, setPhone] = useState('');
 
   return (
     <div>
@@ -229,15 +231,16 @@ function ProfileTab({ user }: { user: any }) {
           </div>
           <div>
             <h3 className="font-medium text-lumi-text">{user.name}</h3>
-            <p className="text-sm text-lumi-muted capitalize">
+            <p className="text-sm text-lumi-muted">
               {user.role === 'client' ? 'Клієнт' : user.role === 'admin' ? 'Адміністратор' : 'Майстер'}
             </p>
           </div>
         </div>
-
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label className="text-xs font-medium text-lumi-muted block mb-1.5">Ім'я та прізвище</label>
+            <label className="text-xs font-medium text-lumi-muted block mb-1.5">
+              Ім&apos;я та прізвище
+            </label>
             <input className="input-field" value={name} onChange={e => setName(e.target.value)} />
           </div>
           <div>
@@ -246,14 +249,10 @@ function ProfileTab({ user }: { user: any }) {
           </div>
           <div>
             <label className="text-xs font-medium text-lumi-muted block mb-1.5">Телефон</label>
-            <input className="input-field" value={phone} onChange={e => setPhone(e.target.value)} />
+            <input className="input-field" value={phone} onChange={e => setPhone(e.target.value)} placeholder="+38 (0__) ___-__-__" />
           </div>
         </div>
-
-        <button
-          onClick={() => toast.success('Профіль оновлено!')}
-          className="btn-primary mt-6"
-        >
+        <button onClick={() => toast.success('Профіль оновлено!')} className="btn-primary mt-6">
           Зберегти зміни
         </button>
       </div>
