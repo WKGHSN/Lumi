@@ -1,13 +1,14 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { useRouter } from 'next/navigation';
-import { Calendar, Clock, User, LogOut, Plus, ChevronRight, Star } from 'lucide-react';
+import { Calendar, Clock, User, LogOut, Plus, ChevronRight, Star, Upload, X } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
 import { useBookingsStore } from '@/store/bookingsStore';
-import { formatDate, formatPrice, getStatusLabel, getStatusBadgeClass, cn } from '@/lib/utils';
+import { formatDate, formatPrice, getStatusLabel, getStatusBadgeClass, cn, getInitials } from '@/lib/utils';
 import toast from 'react-hot-toast';
-import type { Booking } from '@/types';
+import type { Booking, AuthUser } from '@/types';
 
 type TabType = 'upcoming' | 'past' | 'profile';
 
@@ -21,14 +22,16 @@ export default function ClientDashboard() {
   const [activeTab, setActiveTab] = useState<TabType>('upcoming');
   const [mounted, setMounted] = useState(false);
 
-  useEffect(() => {
-  if (mounted && !user) {
-    router.push('/auth/login');
-  }
-}, [mounted, user, router]);
+  useEffect(() => { setMounted(true); }, []);
 
-if (!mounted) return <div className="min-h-screen bg-lumi-milk" />;
-if (!user) return <div className="min-h-screen bg-lumi-milk" />;
+  useEffect(() => {
+    if (mounted && !user) {
+      router.push('/auth/login');
+    }
+  }, [mounted, user, router]);
+
+  if (!mounted) return <div className="min-h-screen bg-lumi-milk" />;
+  if (!user) return <div className="min-h-screen bg-lumi-milk" />;
 
   const userBookings = allBookings.filter(b => b.clientId === user.id);
   const upcoming = getUpcomingBookings(user.id);
@@ -52,14 +55,11 @@ if (!user) return <div className="min-h-screen bg-lumi-milk" />;
 
   return (
     <div className="bg-lumi-milk min-h-screen">
-      {/* Header */}
       <div className="bg-white border-b border-lumi-border">
         <div className="page-container py-8">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
-              <div className="w-14 h-14 rounded-full bg-gradient-to-br from-lumi-blush to-lumi-rose flex items-center justify-center text-white text-xl font-semibold">
-                {user.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
-              </div>
+              <UserAvatar user={user} size="lg" />
               <div>
                 <h1 className="font-serif font-medium text-lumi-text text-xl">
                   Привіт, {user.name.split(' ')[0]}!
@@ -80,7 +80,6 @@ if (!user) return <div className="min-h-screen bg-lumi-milk" />;
       </div>
 
       <div className="page-container py-8">
-        {/* Stats */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
           {[
             { label: 'Всього записів', value: userBookings.length, icon: Calendar, color: 'text-blue-500 bg-blue-50' },
@@ -101,7 +100,6 @@ if (!user) return <div className="min-h-screen bg-lumi-milk" />;
         </div>
 
         <div className="flex flex-col lg:flex-row gap-8">
-          {/* Sidebar Tabs */}
           <aside className="w-full lg:w-56 flex-shrink-0">
             <div className="bg-white rounded-3xl shadow-soft p-4">
               <nav className="flex flex-col gap-1">
@@ -124,7 +122,6 @@ if (!user) return <div className="min-h-screen bg-lumi-milk" />;
             </div>
           </aside>
 
-          {/* Content */}
           <div className="flex-1">
             {activeTab === 'upcoming' && (
               <div>
@@ -165,6 +162,30 @@ if (!user) return <div className="min-h-screen bg-lumi-milk" />;
   );
 }
 
+// ============ USER AVATAR — показує фото або ініціали ============
+function UserAvatar({ user, size = 'md' }: { user: AuthUser; size?: 'sm' | 'md' | 'lg' }) {
+  const sizeClass = size === 'lg' ? 'w-14 h-14 text-xl' : size === 'md' ? 'w-10 h-10 text-base' : 'w-8 h-8 text-sm';
+
+  if (user.avatar) {
+    return (
+      <Image
+        src={user.avatar}
+        alt={user.name}
+        width={size === 'lg' ? 56 : size === 'md' ? 40 : 32}
+        height={size === 'lg' ? 56 : size === 'md' ? 40 : 32}
+        className={cn('rounded-full object-cover flex-shrink-0', sizeClass)}
+      />
+    );
+  }
+
+  return (
+    <div className={cn('rounded-full bg-gradient-to-br from-lumi-blush to-lumi-rose flex items-center justify-center text-white font-semibold flex-shrink-0', sizeClass)}>
+      {getInitials(user.name)}
+    </div>
+  );
+}
+
+// ============ BOOKING CARD ============
 function BookingCard({ booking, onCancel, showCancel }: {
   booking: Booking;
   onCancel?: (id: string) => void;
@@ -206,6 +227,7 @@ function BookingCard({ booking, onCancel, showCancel }: {
   );
 }
 
+// ============ EMPTY STATE ============
 function EmptyState({ message, action }: { message: string; action?: React.ReactNode }) {
   return (
     <div className="bg-white rounded-2xl shadow-soft p-10 text-center">
@@ -216,26 +238,123 @@ function EmptyState({ message, action }: { message: string; action?: React.React
   );
 }
 
-function ProfileTab({ user }: { user: any }) {
+// ============ PROFILE TAB ============
+function ProfileTab({ user }: { user: AuthUser }) {
+  const { setHydrated } = useAuthStore();
+  const updateUser = useAuthStore(s => s.user);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const [name, setName] = useState(user.name);
   const [email, setEmail] = useState(user.email);
   const [phone, setPhone] = useState('');
+  const [avatar, setAvatar] = useState<string | undefined>(user.avatar);
+  const [isUploading, setIsUploading] = useState(false);
+
+  const handleAvatarUpload = (file: File) => {
+    if (!file.type.startsWith('image/')) { toast.error('Оберіть файл зображення'); return; }
+    if (file.size > 5 * 1024 * 1024) { toast.error('Файл занадто великий (максимум 5 МБ)'); return; }
+
+    setIsUploading(true);
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const dataUrl = e.target?.result as string;
+      const img = new window.Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const MAX = 400;
+        let { width, height } = img;
+        if (width > height) { if (width > MAX) { height = Math.round(height * MAX / width); width = MAX; } }
+        else { if (height > MAX) { width = Math.round(width * MAX / height); height = MAX; } }
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d')!;
+        ctx.drawImage(img, 0, 0, width, height);
+        const compressed = canvas.toDataURL('image/webp', 0.85);
+        setAvatar(compressed);
+        setIsUploading(false);
+        toast.success('Фото завантажено — збережіть зміни');
+      };
+      img.src = dataUrl;
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleSave = () => {
+    // Оновлюємо дані в localStorage через authStore
+    const updated = { ...user, name, email, avatar };
+    localStorage.setItem('lumibeauty-auth', JSON.stringify({ user: updated }));
+    // Перезавантажуємо стан
+    setHydrated();
+    toast.success('Профіль оновлено!');
+  };
 
   return (
     <div>
       <h2 className="font-serif font-medium text-lumi-text text-xl mb-4">Мій профіль</h2>
       <div className="bg-white rounded-2xl shadow-soft p-6">
-        <div className="flex items-center gap-4 mb-6 pb-6 border-b border-lumi-border">
-          <div className="w-16 h-16 rounded-full bg-gradient-to-br from-lumi-blush to-lumi-rose flex items-center justify-center text-white text-2xl font-semibold">
-            {user.name.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2)}
+
+        {/* Avatar section */}
+        <div className="flex items-center gap-5 mb-6 pb-6 border-b border-lumi-border">
+          <div className="relative group flex-shrink-0">
+            {avatar ? (
+              <Image
+                src={avatar}
+                alt={user.name}
+                width={80}
+                height={80}
+                className="rounded-full object-cover w-20 h-20"
+              />
+            ) : (
+              <div className="w-20 h-20 rounded-full bg-gradient-to-br from-lumi-blush to-lumi-rose flex items-center justify-center text-white text-2xl font-semibold">
+                {getInitials(user.name)}
+              </div>
+            )}
+
+            {/* Overlay для завантаження */}
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="absolute inset-0 bg-black/50 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+              disabled={isUploading}
+            >
+              <Upload className="w-5 h-5 text-white" />
+            </button>
+
+            {/* Кнопка видалення фото */}
+            {avatar && (
+              <button
+                onClick={() => setAvatar(undefined)}
+                className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            )}
           </div>
+
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={e => e.target.files?.[0] && handleAvatarUpload(e.target.files[0])}
+          />
+
           <div>
             <h3 className="font-medium text-lumi-text">{user.name}</h3>
-            <p className="text-sm text-lumi-muted">
+            <p className="text-sm text-lumi-muted mb-2">
               {user.role === 'client' ? 'Клієнт' : user.role === 'admin' ? 'Адміністратор' : 'Майстер'}
             </p>
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="text-xs text-lumi-rose hover:underline flex items-center gap-1"
+              disabled={isUploading}
+            >
+              <Upload className="w-3 h-3" />
+              {isUploading ? 'Завантаження...' : avatar ? 'Змінити фото' : 'Завантажити фото'}
+            </button>
           </div>
         </div>
+
+        {/* Form */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <label className="text-xs font-medium text-lumi-muted block mb-1.5">
@@ -249,10 +368,16 @@ function ProfileTab({ user }: { user: any }) {
           </div>
           <div>
             <label className="text-xs font-medium text-lumi-muted block mb-1.5">Телефон</label>
-            <input className="input-field" value={phone} onChange={e => setPhone(e.target.value)} placeholder="+38 (0__) ___-__-__" />
+            <input
+              className="input-field"
+              value={phone}
+              onChange={e => setPhone(e.target.value)}
+              placeholder="+38 (0__) ___-__-__"
+            />
           </div>
         </div>
-        <button onClick={() => toast.success('Профіль оновлено!')} className="btn-primary mt-6">
+
+        <button onClick={handleSave} className="btn-primary mt-6">
           Зберегти зміни
         </button>
       </div>

@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
@@ -20,18 +20,20 @@ export default function AdminDashboard() {
   const allBookings = useBookingsStore(s => s.bookings);
   const updateStatus = useBookingsStore(s => s.updateStatus);
   const cancelBooking = useBookingsStore(s => s.cancelBooking);
-
   const [activeTab, setActiveTab] = useState<AdminTab>('dashboard');
   const [searchQuery, setSearchQuery] = useState('');
   const [mounted, setMounted] = useState(false);
-  useEffect(() => {
-  if (mounted && !user) {
-    router.push('/auth/login');
-  }
-}, [mounted, user, router]);
 
-if (!mounted) return <div className="min-h-screen bg-lumi-milk" />;
-if (!user) return <div className="min-h-screen bg-lumi-milk" />;
+  useEffect(() => { setMounted(true); }, []);
+
+  useEffect(() => {
+    if (mounted && (!user || user.role !== 'admin')) {
+      router.push('/auth/login');
+    }
+  }, [mounted, user, router]);
+
+  if (!mounted) return <div className="min-h-screen bg-lumi-milk" />;
+  if (!user || user.role !== 'admin') return <div className="min-h-screen bg-lumi-milk" />;
 
   const today = new Date().toISOString().split('T')[0];
   const todayBookings = allBookings.filter(b => b.date === today);
@@ -542,8 +544,7 @@ function MastersTab() {
 }
 
 function GalleryTab() {
-  const { gallery, addGalleryItem, removeGalleryItem, updateGalleryItem, reorderGallery } = useDataStore();
-  const { masters: storeMasters } = useDataStore();
+  const { gallery, addGalleryItem, removeGalleryItem, updateGalleryItem, reorderGallery, masters: storeMasters } = useDataStore();
   const [showUpload, setShowUpload] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editDesc, setEditDesc] = useState('');
